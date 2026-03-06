@@ -9,6 +9,8 @@
                           HttpResponse$BodyHandlers)
            (java.io InputStream)))
 
+(set! *warn-on-reflection* true)
+
 (def json-object-mapper
   (json/object-mapper {:decode-key-fn keyword}))
 

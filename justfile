@@ -16,4 +16,4 @@ native:
     clojure -T:build native
 
 native-smoke:
-    ./target/llm prompt --no-stream "Say hi briefly."
+    ./target/clj-llm prompt --no-stream "Say hi briefly."

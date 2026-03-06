@@ -193,7 +193,7 @@
          (cli/prompt-shorthand-args ["Say hi briefly."]))))
 
 (deftest cli-config-test
-  (is (= "llm" (:command cli/cli-config)))
+  (is (= "clj-llm" (:command cli/cli-config)))
   (is (= 2 (count (:subcommands cli/cli-config))))
   (is (= ["models" "prompt"]
          (map :command (:subcommands cli/cli-config)))))

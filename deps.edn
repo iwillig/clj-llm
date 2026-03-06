@@ -1,7 +1,19 @@
 {:deps {org.clojure/clojure {:mvn/version "1.12.4"}
         cli-matic/cli-matic {:mvn/version "0.5.4"}
         metosin/jsonista {:mvn/version "0.3.13"}}
- :aliases {:nrepl
+ :paths ["src" "test" "dev"]
+ :aliases {:dev {:extra-deps
+                 {io.github.tonsky/clj-reload {:mvn/version "0.1.0"}}}
+
+
+           :jvm-base
+           {:jvm-opts ["-XX:-OmitStackTraceInFastThrow"
+                       "--add-opens=java.base/java.nio=ALL-UNNAMED"
+                       "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+                       "--enable-native-access=ALL-UNNAMED"
+                       "--sun-misc-unsafe-memory-access=allow"]}
+
+           :nrepl
            {:extra-deps
             {nrepl/nrepl {:mvn/version "1.3.0"}
              cider/cider-nrepl {:mvn/version "0.56.0"}}

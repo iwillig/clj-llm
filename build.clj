@@ -9,7 +9,7 @@
 (def version "0.1.0")
 (def class-dir "target/classes")
 (def uber-file (format "target/%s-%s-standalone.jar" (name lib) version))
-(def native-bin "target/llm")
+(def native-bin "target/clj-llm")
 
 (def project-deps
   (-> "deps.edn" io/file slurp edn/read-string))

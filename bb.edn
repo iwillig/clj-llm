@@ -1,11 +1,11 @@
 {:tasks
  {nrepl
   {:doc "Run a nRepl"
-   :task (do (clojure "-M:nrepl"))}
+   :task (do (clojure "-M:jvm-base:dev:nrepl"))}
 
   test
   {:doc "Run tests"
-   :task (do (clojure "-M:test"))}
+   :task (do (clojure "-M:dev:test"))}
 
   jar
   {:doc "Build uberjar"
@@ -17,7 +17,7 @@
 
   native-smoke
   {:doc "Run native CLI smoke test"
-   :task (shell "./target/llm prompt --no-stream 'Say hi briefly.'")}
+   :task (shell "./target/clj-llm prompt --no-stream 'Say hi briefly.'")}
 
   ollama-poc
   {:doc "Run the CLI against local Ollama"

@@ -8,6 +8,8 @@
             [llm.types :as types])
   (:import (java.io BufferedInputStream PushbackInputStream)))
 
+(set! *warn-on-reflection* true)
+
 (def pretty-json-object-mapper
   (json/object-mapper {:pretty true}))
 
@@ -143,7 +145,7 @@
     :type :string}])
 
 (def cli-config
-  {:command "llm"
+  {:command "clj-llm"
    :description "Small OpenAI-compatible CLI proof of concept"
    :version "0.1.0"
    :opts shared-opts

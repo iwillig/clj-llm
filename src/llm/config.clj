@@ -1,6 +1,8 @@
 (ns llm.config
   "Configuration helpers for the llm CLI and providers.")
 
+(set! *warn-on-reflection* true)
+
 (def default-base-url
   (or (System/getenv "LLM_BASE_URL")
       "http://127.0.0.1:11434/v1"))
