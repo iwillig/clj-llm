@@ -1,0 +1,24 @@
+{:tasks
+ {nrepl
+  {:doc "Run a nRepl"
+   :task (do (clojure "-M:nrepl"))}
+
+  test
+  {:doc "Run tests"
+   :task (do (clojure "-M:test"))}
+
+  jar
+  {:doc "Build uberjar"
+   :task (do (clojure "-T:build" "uber"))}
+
+  native
+  {:doc "Build GraalVM native image"
+   :task (do (clojure "-T:build" "native"))}
+
+  native-smoke
+  {:doc "Run native CLI smoke test"
+   :task (shell "./target/llm prompt --no-stream 'Say hi briefly.'")}
+
+  ollama-poc
+  {:doc "Run the CLI against local Ollama"
+   :task (apply clojure "-M" "-m" "llm.main" *command-line-args*)}}}

@@ -1,0 +1,17 @@
+{:deps {org.clojure/clojure {:mvn/version "1.12.4"}
+        cli-matic/cli-matic {:mvn/version "0.5.4"}
+        metosin/jsonista {:mvn/version "0.3.13"}}
+ :aliases {:nrepl
+           {:extra-deps
+            {nrepl/nrepl {:mvn/version "1.3.0"}
+             cider/cider-nrepl {:mvn/version "0.56.0"}}
+            :jvm-opts ["-Djdk.attach.allowAttachSelf"]
+            :main-opts ["-m" "nrepl.cmdline"
+                        "--middleware" "[cider.nrepl/cider-middleware]"
+                        "--port" "7889"]}
+           :test
+           {:extra-paths ["test"]
+            :main-opts ["-e" "(require 'clojure.test 'llm.openai-compat-test 'llm.jdk-http-test) (clojure.test/run-tests 'llm.openai-compat-test 'llm.jdk-http-test)"]}
+           :build
+           {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+            :ns-default build}}}
