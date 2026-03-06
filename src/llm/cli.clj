@@ -5,7 +5,8 @@
             [jsonista.core :as json]
             [llm.openai-compat :as openai-compat]
             [llm.protocols :as protocols]
-            [llm.types :as types]))
+            [llm.types :as types])
+  (:import (java.io BufferedInputStream PushbackInputStream)))
 
 (def pretty-json-object-mapper
   (json/object-mapper {:pretty true}))
@@ -13,12 +14,27 @@
 (def prompt-shorthand-exclusions
   #{"prompt" "models" "-?" "--help"})
 
-(defn read-stdin
-  "Read all available stdin and return trimmed text or nil."
+(defn stdin-available?
+  "Return true when stdin has buffered input ready to read."
   []
-  (let [input (slurp *in*)]
-    (when-not (str/blank? input)
-      input)))
+  (let [input-stream System/in]
+    (cond
+      (instance? PushbackInputStream input-stream)
+      (pos? (.available ^PushbackInputStream input-stream))
+
+      (instance? BufferedInputStream input-stream)
+      (pos? (.available ^BufferedInputStream input-stream))
+
+      :else
+      (pos? (.available input-stream)))))
+
+(defn read-stdin
+  "Read stdin when buffered input is available and return text or nil."
+  []
+  (when (stdin-available?)
+    (let [input (slurp *in*)]
+      (when-not (str/blank? input)
+        input))))
 
 (defn resolve-prompt
   "Resolve the final prompt from stdin and positional input."

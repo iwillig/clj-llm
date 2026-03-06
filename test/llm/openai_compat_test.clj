@@ -40,6 +40,14 @@
             :model config/default-model}
            (config/resolve-provider-config {})))))
 
+(deftest stdin-available-test
+  (testing "returns false when no stdin bytes are available"
+    (with-redefs [cli/stdin-available? (constantly false)]
+      (is (false? (cli/stdin-available?)))))
+  (testing "read-stdin skips reading when no stdin bytes are available"
+    (with-redefs [cli/stdin-available? (constantly false)]
+      (is (nil? (cli/read-stdin))))))
+
 (deftest resolve-prompt-test
   (is (= "stdin text\n\nprompt text"
          (cli/resolve-prompt {:stdin "stdin text"
@@ -138,6 +146,27 @@
           (protocols/complete
            (openai-compat/make-provider {:transport (->StubTransport nil nil nil)})
            {:prompt "Hello"})))))
+
+(deftest run-prompt-command-skips-stdin-when-unavailable-test
+  (let [requests (atom [])
+        provider (openai-compat/make-provider
+                  {:transport (->StubTransport nil nil requests)})]
+    (with-redefs [cli/stdin-available? (constantly false)
+                  openai-compat/make-provider (fn [_] provider)]
+      (is (= "Stub response\n"
+             (with-out-str
+               (cli/run-prompt-command {:prompt "Say hi briefly."
+                                        :stream false
+                                        :host config/default-base-url
+                                        :model config/default-model
+                                        :json false}))))
+      (is (= [[:post {:url (str config/default-base-url "/completions")
+                      :headers {"authorization"
+                                (str "Bearer " config/default-api-key)}
+                      :body {:model config/default-model
+                             :prompt "Say hi briefly."
+                             :stream false}}]]
+             @requests)))))
 
 (deftest provider-streams-through-transport-test
   (let [events (atom [])]
