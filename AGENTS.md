@@ -159,12 +159,17 @@ Current test namespaces include:
 - `test/llm/openai_compat_test.clj`
 - `test/llm/jdk_http_test.clj`
 - `test/llm/main_test.clj`
+- `test/llm/tool_integration_test.clj`
 
 Project test alias currently runs:
 ```clojure
 llm.openai-compat-test
 llm.jdk-http-test
+llm.tool-integration-test
 ```
+
+The tool integration test is guarded and skips effectively when the local
+OpenAI-compatible backend is unavailable or does not emit tool calls.
 
 So if you add or modify tests outside those namespaces, also run them explicitly.
 

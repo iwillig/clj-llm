@@ -3,8 +3,11 @@
   (:require [cli-matic.core :as cli]
             [clojure.string :as str]
             [jsonista.core :as json]
+            [llm.openai-chat :as openai-chat]
             [llm.openai-compat :as openai-compat]
             [llm.protocols :as protocols]
+            [llm.tool-loop :as tool-loop]
+            [llm.tool-registry :as tool-registry]
             [llm.types :as types])
   (:import (java.io BufferedInputStream PushbackInputStream)))
 
@@ -60,7 +63,7 @@
 
 (defn ->completion-request
   "Convert CLI options into a normalized completion request record."
-  [{:keys [model system stream raw prompt option stdin]}]
+  [{:keys [model system stream raw prompt option stdin tool tool-max-rounds]}]
   (types/map->CompletionRequest
    {:prompt (resolve-prompt {:prompt prompt
                              :stdin stdin})
@@ -68,7 +71,9 @@
     :system system
     :stream? stream
     :raw? raw
-    :options (option-pairs->map option)}))
+    :options (option-pairs->map option)
+    :tools tool
+    :max-tool-rounds tool-max-rounds}))
 
 (defn print-stream-event
   "Print a normalized stream event to stdout."
@@ -78,14 +83,11 @@
     :done (println)
     nil))
 
-(defn run-prompt-command
-  "Execute the prompt command."
+(defn run-plain-prompt-command
+  "Execute a prompt request without tool support."
   [{:keys [json host model stream] :as opts}]
   (let [provider (openai-compat/make-provider {:base-url host :model model})
         request (->completion-request (assoc opts :stdin (read-stdin)))]
-    (when-not (:prompt request)
-      (throw (ex-info "Missing prompt"
-                      {:opts opts})))
     (if stream
       (do
         (protocols/complete-stream provider request print-stream-event)
@@ -95,6 +97,29 @@
           (println (json/write-value-as-string result pretty-json-object-mapper))
           (println (:response result)))
         0))))
+
+(defn run-tool-prompt-command
+  "Execute a prompt request with tool support."
+  [{:keys [json host model] :as opts}]
+  (let [provider (openai-chat/make-provider {:base-url host :model model})
+        request (->completion-request (assoc opts :stdin (read-stdin)))
+        available-tools (tool-registry/resolve-tools (:tools request))
+        result (tool-loop/run-tool-loop provider request available-tools)]
+    (if json
+      (println (json/write-value-as-string result pretty-json-object-mapper))
+      (println (:response result)))
+    0))
+
+(defn run-prompt-command
+  "Execute the prompt command."
+  [opts]
+  (let [request (->completion-request (assoc opts :stdin (read-stdin)))]
+    (when-not (:prompt request)
+      (throw (ex-info "Missing prompt"
+                      {:opts opts})))
+    (if (seq (:tools request))
+      (run-tool-prompt-command opts)
+      (run-plain-prompt-command opts))))
 
 (defn run-models-command
   "List models from the configured OpenAI-compatible endpoint."
@@ -139,6 +164,15 @@
     :as "Model option name/value pair"
     :type :string
     :multiple true}
+   {:option "tool"
+    :short "T"
+    :as "Enable a tool by name"
+    :type :string
+    :multiple true}
+   {:option "tool-max-rounds"
+    :as "Maximum number of tool execution rounds"
+    :type :int
+    :default 8}
    {:option "prompt"
     :as "Prompt text"
     :short 0

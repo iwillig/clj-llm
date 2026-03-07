@@ -5,7 +5,6 @@
  :aliases {:dev {:extra-deps
                  {io.github.tonsky/clj-reload {:mvn/version "0.1.0"}}}
 
-
            :jvm-base
            {:jvm-opts ["-XX:-OmitStackTraceInFastThrow"
                        "--add-opens=java.base/java.nio=ALL-UNNAMED"
@@ -23,7 +22,7 @@
                         "--port" "7889"]}
            :test
            {:extra-paths ["test"]
-            :main-opts ["-e" "(require 'clojure.test 'llm.openai-compat-test 'llm.jdk-http-test) (clojure.test/run-tests 'llm.openai-compat-test 'llm.jdk-http-test)"]}
+            :main-opts ["-e" "(require 'clojure.test 'llm.openai-compat-test 'llm.jdk-http-test 'llm.tool-integration-test) (clojure.test/run-tests 'llm.openai-compat-test 'llm.jdk-http-test 'llm.tool-integration-test)"]}
            :build
            {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
             :ns-default build}}}

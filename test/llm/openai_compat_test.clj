@@ -17,7 +17,7 @@
     (or (:response this)
         {:object "list"
          :data [{:id "llama3.2:latest"}
-                {:id "qwen2.5:0.5b"}] }))
+                {:id "qwen2.5:0.5b"}]}))
   (post-json [this request]
     (when-let [requests (:requests this)]
       (swap! requests conj [:post request]))
@@ -64,7 +64,11 @@
           :system "be concise"
           :stream? true
           :raw? true
-          :options {:temperature "0.2"}}
+          :options {:temperature "0.2"}
+          :messages nil
+          :tools nil
+          :tool-choice nil
+          :max-tool-rounds nil}
          (into {}
                (cli/->completion-request
                 {:stdin "stdin text"
@@ -168,6 +172,18 @@
                              :stream false}}]]
              @requests)))))
 
+(deftest completion-request-with-tools-test
+  (is (= ["llm_time"]
+         (:tools (cli/->completion-request
+                  {:prompt "what time is it?"
+                   :tool ["llm_time"]
+                   :tool-max-rounds 4}))))
+  (is (= 4
+         (:max-tool-rounds (cli/->completion-request
+                            {:prompt "what time is it?"
+                             :tool ["llm_time"]
+                             :tool-max-rounds 4})))))
+
 (deftest provider-streams-through-transport-test
   (let [events (atom [])]
     (protocols/complete-stream
@@ -176,7 +192,7 @@
                                         {:model "llama3.2:latest"
                                          :choices [{:text ""
                                                     :finish_reason "stop"}]}]
-                                      nil)})
+                                   nil)})
      {:prompt "Hello"}
      #(swap! events conj %))
     (is (= [:text-delta :done]
@@ -196,4 +212,9 @@
   (is (= "clj-llm" (:command cli/cli-config)))
   (is (= 2 (count (:subcommands cli/cli-config))))
   (is (= ["models" "prompt"]
-         (map :command (:subcommands cli/cli-config)))))
+         (map :command (:subcommands cli/cli-config))))
+  (is (= #{"tool" "tool-max-rounds"}
+         (->> cli/prompt-opts
+              (map :option)
+              (filter #{"tool" "tool-max-rounds"})
+              set))))
