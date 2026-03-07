@@ -1,0 +1,6 @@
+/target/
+/.nrepl-port
+/.lsp/
+/.cpcache/
+/.idea/
+/llm.iml

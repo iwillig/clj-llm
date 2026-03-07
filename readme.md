@@ -1,6 +1,12 @@
 # CLJ LLM
 
-A low level library and command line tool for interacting with LLM agents.
+A low level library and command line tool for interacting with LLM agents
+in Clojure.
+
+This project is inspired by Simon Willison's
+[`llm`](https://github.com/simonw/llm). Our goal is to bring a similar
+low-level library plus command line tool system to the Clojure programming
+language.
 
 The CLI binary is named `clj-llm` to avoid conflicting with the Python
 `llm` project.
