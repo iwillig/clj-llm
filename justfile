@@ -4,7 +4,7 @@ poc *args:
     clojure -M -m llm.main {{args}}
 
 test:
-    clojure -M:test
+    clojure -M:dev:test
 
 nrepl:
     clojure -M:nrepl

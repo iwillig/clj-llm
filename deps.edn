@@ -3,7 +3,8 @@
         metosin/jsonista {:mvn/version "0.3.13"}}
  :paths ["src" "test" "dev"]
  :aliases {:dev {:extra-deps
-                 {io.github.tonsky/clj-reload {:mvn/version "0.1.0"}}}
+                 {io.github.tonsky/clj-reload {:mvn/version "0.1.0"}
+                  nubank/mockfn {:mvn/version "0.7.0"}}}
 
            :jvm-base
            {:jvm-opts ["-XX:-OmitStackTraceInFastThrow"
@@ -22,7 +23,14 @@
                         "--port" "7889"]}
            :test
            {:extra-paths ["test"]
-            :main-opts ["-e" "(require 'clojure.test 'llm.openai-compat-test 'llm.jdk-http-test 'llm.tool-integration-test) (clojure.test/run-tests 'llm.openai-compat-test 'llm.jdk-http-test 'llm.tool-integration-test)"]}
+            :extra-deps {io.github.cognitect-labs/test-runner
+                         {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+            :main-opts ["-m" "cognitect.test-runner"]}
+
+           :test-runner
+           {:extra-paths ["test"]
+            :extra-deps {io.github.cognitect-labs/test-runner
+                         {:git/tag "v0.5.1" :git/sha "dfb30dd"}}}
            :build
            {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
             :ns-default build}}}
