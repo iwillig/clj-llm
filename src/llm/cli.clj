@@ -3,6 +3,7 @@
   (:require [cli-matic.core :as cli]
             [clojure.string :as str]
             [jsonista.core :as json]
+            [llm.model-catalog :as model-catalog]
             [llm.openai-chat :as openai-chat]
             [llm.openai-compat :as openai-compat]
             [llm.protocols :as protocols]
@@ -75,6 +76,15 @@
     :tools tool
     :max-tool-rounds tool-max-rounds}))
 
+(defn resolve-cli-model
+  "Resolve the effective model id from an exact id, alias, or query terms."
+  [{:keys [host model query] :as _opts}]
+  (or (model-catalog/resolve-model {:base-url host
+                                    :model model
+                                    :query-terms query})
+      model
+      openai-compat/default-model))
+
 (defn print-stream-event
   "Print a normalized stream event to stdout."
   [{:keys [type text]}]
@@ -85,9 +95,13 @@
 
 (defn run-plain-prompt-command
   "Execute a prompt request without tool support."
-  [{:keys [json host model stream] :as opts}]
-  (let [provider (openai-compat/make-provider {:base-url host :model model})
-        request (->completion-request (assoc opts :stdin (read-stdin)))]
+  [{:keys [json host stream] :as opts}]
+  (let [resolved-model (resolve-cli-model opts)
+        provider (openai-compat/make-provider {:base-url host
+                                               :model resolved-model})
+        request (->completion-request (assoc opts
+                                             :stdin (read-stdin)
+                                             :model resolved-model))]
     (if stream
       (do
         (protocols/complete-stream provider request print-stream-event)
@@ -100,9 +114,13 @@
 
 (defn run-tool-prompt-command
   "Execute a prompt request with tool support."
-  [{:keys [json host model] :as opts}]
-  (let [provider (openai-chat/make-provider {:base-url host :model model})
-        request (->completion-request (assoc opts :stdin (read-stdin)))
+  [{:keys [json host] :as opts}]
+  (let [resolved-model (resolve-cli-model opts)
+        provider (openai-chat/make-provider {:base-url host
+                                             :model resolved-model})
+        request (->completion-request (assoc opts
+                                             :stdin (read-stdin)
+                                             :model resolved-model))
         available-tools (tool-registry/resolve-tools (:tools request))
         result (tool-loop/run-tool-loop provider request available-tools)]
     (if json
@@ -123,12 +141,22 @@
 
 (defn run-models-command
   "List models from the configured OpenAI-compatible endpoint."
-  [{:keys [json host model]}]
-  (let [result (openai-compat/list-models {:base-url host :model model})]
+  [{:keys [json host query model options]}]
+  (let [descriptors (model-catalog/search-models {:base-url host
+                                                  :query-terms query})
+        filtered-descriptors (if (seq model)
+                               (filterv (fn [descriptor]
+                                          (contains? (set model) (:id descriptor)))
+                                        descriptors)
+                               descriptors)]
     (if json
-      (println (json/write-value-as-string result pretty-json-object-mapper))
-      (doseq [entry (:data result)]
-        (println (:id entry))))
+      (println (json/write-value-as-string
+                (mapv model-catalog/descriptor->map filtered-descriptors)
+                pretty-json-object-mapper))
+      (doseq [descriptor filtered-descriptors]
+        (println (if options
+                   (model-catalog/format-model-details descriptor)
+                   (model-catalog/format-model-summary descriptor)))))
     0))
 
 (def shared-opts
@@ -164,6 +192,11 @@
     :as "Model option name/value pair"
     :type :string
     :multiple true}
+   {:option "query"
+    :short "q"
+    :as "Search term used to resolve a model id"
+    :type :string
+    :multiple true}
    {:option "tool"
     :short "T"
     :as "Enable a tool by name"
@@ -178,14 +211,47 @@
     :short 0
     :type :string}])
 
+(def models-opts
+  [{:option "model"
+    :short "m"
+    :as "Filter by exact model id"
+    :type :string
+    :multiple true}
+   {:option "query"
+    :short "q"
+    :as "Filter models by query terms"
+    :type :string
+    :multiple true}
+   {:option "options"
+    :as "Show supported model options"
+    :type :with-flag
+    :default false}])
+
 (def cli-config
   {:command "clj-llm"
    :description "Small OpenAI-compatible CLI proof of concept"
    :version "0.1.0"
-   :opts shared-opts
+   :opts [{:option "host"
+           :short "h"
+           :as "Base URL"
+           :type :string
+           :default openai-compat/default-base-url}
+          {:option "json"
+           :as "Print full JSON response"
+           :type :with-flag
+           :default false}]
    :subcommands [{:command "models"
                   :description "List available models"
-                  :opts shared-opts
+                  :opts (into [{:option "host"
+                                :short "h"
+                                :as "Base URL"
+                                :type :string
+                                :default openai-compat/default-base-url}
+                               {:option "json"
+                                :as "Print full JSON response"
+                                :type :with-flag
+                                :default false}]
+                              models-opts)
                   :runs run-models-command}
                  {:command "prompt"
                   :description "Execute a prompt"

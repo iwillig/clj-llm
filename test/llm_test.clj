@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [llm :as llm]
+            [llm.model-catalog :as model-catalog]
             [llm.protocols :as protocols]
             [llm.tools :as tools]
             [llm.types :as types]))
@@ -12,15 +13,27 @@
     (is (string? (:base-url (llm/model))))
     (is (string? (:api-key (llm/model)))))
   (testing "accepts a model id string"
-    (is (= "gpt-test"
-           (:model (llm/model "gpt-test")))))
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-test")]
+      (is (= "gpt-test"
+             (:model (llm/model "gpt-test"))))))
+  (testing "resolves aliases in model strings"
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-4o-mini")]
+      (is (= "gpt-4o-mini"
+             (:model (llm/model "4o-mini"))))))
   (testing "accepts an opts map"
-    (is (= {:base-url "http://example.test/v1"
-            :api-key "secret"
-            :model "gpt-test"}
-           (llm/model {:base-url "http://example.test/v1"
-                       :api-key "secret"
-                       :model "gpt-test"})))))
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-test")]
+      (is (= {:base-url "http://example.test/v1"
+              :api-key "secret"
+              :model "gpt-test"}
+             (llm/model {:base-url "http://example.test/v1"
+                         :api-key "secret"
+                         :model "gpt-test"})))))
+  (testing "resolves query terms in opts maps"
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-4o-mini")]
+      (is (= "gpt-4o-mini"
+             (:model (llm/model {:base-url "http://example.test/v1"
+                                 :api-key "secret"
+                                 :query-terms ["4o" "mini"]})))))))
 
 (deftest tool-test
   (let [upper-tool (llm/tool {:name "upper"

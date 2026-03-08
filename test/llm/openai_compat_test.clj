@@ -3,6 +3,7 @@
             [jsonista.core :as json]
             [llm.cli :as cli]
             [llm.config :as config]
+            [llm.model-catalog :as model-catalog]
             [llm.openai-compat :as openai-compat]
             [llm.protocols :as protocols]
             [llm.types :as types]))
@@ -156,7 +157,8 @@
         provider (openai-compat/make-provider
                   {:transport (->StubTransport nil nil requests)})]
     (with-redefs [cli/stdin-available? (constantly false)
-                  openai-compat/make-provider (fn [_] provider)]
+                  openai-compat/make-provider (fn [_] provider)
+                  model-catalog/resolve-model (fn [_] config/default-model)]
       (is (= "Stub response\n"
              (with-out-str
                (cli/run-prompt-command {:prompt "Say hi briefly."
@@ -208,13 +210,65 @@
   (is (= ["prompt" "Say hi briefly."]
          (cli/prompt-shorthand-args ["Say hi briefly."]))))
 
+(deftest resolve-cli-model-test
+  (with-redefs [model-catalog/resolve-model (fn [_] "gpt-4o-mini")]
+    (is (= "gpt-4o-mini"
+           (cli/resolve-cli-model {:host config/default-base-url
+                                   :query ["4o" "mini"]}))))
+  (with-redefs [model-catalog/resolve-model (fn [_] "gpt-4o")]
+    (is (= "gpt-4o"
+           (cli/resolve-cli-model {:host config/default-base-url
+                                   :model "4o"})))))
+
+(deftest run-models-command-test
+  (let [descriptor (model-catalog/raw-model->descriptor {:id "gpt-4o-mini"})]
+    (with-redefs [model-catalog/search-models (fn [_] [descriptor])]
+      (is (= (str (model-catalog/format-model-summary descriptor) "\n")
+             (with-out-str
+               (cli/run-models-command {:host config/default-base-url
+                                        :json false
+                                        :options false
+                                        :query ["4o" "mini"]}))))
+      (is (.contains (with-out-str
+                       (cli/run-models-command {:host config/default-base-url
+                                                :json false
+                                                :options true
+                                                :query ["4o" "mini"]}))
+                     "Options:"))
+      (is (.contains (with-out-str
+                       (cli/run-models-command {:host config/default-base-url
+                                                :json false
+                                                :options true
+                                                :query ["4o" "mini"]}))
+                     "Provider key:"))
+      (is (= (str (json/write-value-as-string
+                   [(model-catalog/descriptor->map descriptor)]
+                   cli/pretty-json-object-mapper)
+                  "\n")
+             (with-out-str
+               (cli/run-models-command {:host config/default-base-url
+                                        :json true
+                                        :options false
+                                        :query ["4o" "mini"]}))))
+      (is (= (str (model-catalog/format-model-summary descriptor) "\n")
+             (with-out-str
+               (cli/run-models-command {:host config/default-base-url
+                                        :json false
+                                        :options false
+                                        :model ["gpt-4o-mini"]
+                                        :query ["4o"]})))))))
+
 (deftest cli-config-test
   (is (= "clj-llm" (:command cli/cli-config)))
   (is (= 2 (count (:subcommands cli/cli-config))))
   (is (= ["models" "prompt"]
          (map :command (:subcommands cli/cli-config))))
-  (is (= #{"tool" "tool-max-rounds"}
+  (is (= #{"tool" "tool-max-rounds" "query"}
          (->> cli/prompt-opts
               (map :option)
-              (filter #{"tool" "tool-max-rounds"})
+              (filter #{"tool" "tool-max-rounds" "query"})
+              set)))
+  (is (= #{"model" "query" "options"}
+         (->> cli/models-opts
+              (map :option)
               set))))

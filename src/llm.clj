@@ -1,6 +1,7 @@
 (ns llm
   "High-level public API for prompting models and running tool-enabled conversations."
   (:require [llm.config :as config]
+            [llm.model-catalog :as model-catalog]
             [llm.openai-chat :as openai-chat]
             [llm.openai-compat :as openai-compat]
             [llm.protocols :as protocols]
@@ -27,13 +28,25 @@
                 :parameters (tools/tool-parameters this)}}))
 
 (defn model
-  "Build a normalized model configuration map for the public API."
+  "Build a normalized model configuration map for the public API.
+
+  Accepts either an explicit model id string or an opts map. Opts may include
+  `:model` for an exact model id or alias, or `:query-terms` for model search
+  terms that resolve to a concrete model id.
+  "
   ([]
    (config/resolve-provider-config {}))
   ([model-or-opts]
    (if (string? model-or-opts)
-     (config/resolve-provider-config {:model model-or-opts})
-     (config/resolve-provider-config model-or-opts))))
+     (config/resolve-provider-config
+      {:model (or (model-catalog/resolve-model {:model model-or-opts})
+                  model-or-opts)})
+     (let [resolved-config (config/resolve-provider-config model-or-opts)
+           resolved-model (or (model-catalog/resolve-model {:base-url (:base-url resolved-config)
+                                                            :model (:model model-or-opts)
+                                                            :query-terms (:query-terms model-or-opts)})
+                              (:model resolved-config))]
+       (assoc resolved-config :model resolved-model)))))
 
 (defn tool
   "Create a model-callable tool from plain data and an invoke function."
@@ -54,7 +67,11 @@
   (->FunctionTool name description parameters invoke))
 
 (defn list-models
-  "List models from the configured endpoint."
+  "List raw model entries from the configured endpoint.
+
+  For normalized model descriptors, aliases, features, and option metadata use
+  `llm.model-catalog/list-models`.
+  "
   ([]
    (openai-compat/list-models {}))
   ([model-or-opts]
