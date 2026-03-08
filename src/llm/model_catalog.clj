@@ -17,6 +17,11 @@
   (resolve-model-id [this opts]
     "Resolve a concrete model ID from an exact id, alias, or query terms."))
 
+(defn model-supports-feature?
+  "Return true when the model descriptor advertises the supplied feature."
+  [descriptor feature]
+  (contains? (set (:features descriptor)) feature))
+
 (def option-definitions
   {::temperature
    (->ModelOption "temperature"

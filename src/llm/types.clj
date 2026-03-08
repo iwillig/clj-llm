@@ -3,7 +3,7 @@
 
 (defrecord CompletionRequest
            [prompt model system stream? raw? options
-            messages tools tool-choice max-tool-rounds])
+            messages tools tool-choice max-tool-rounds schema])
 
 (defrecord ToolCall
            [id name arguments raw])

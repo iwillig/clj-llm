@@ -54,7 +54,7 @@
 
 (defn request->chat-body
   "Convert a completion request into an OpenAI-compatible chat request body."
-  [{:keys [messages model tools tool-choice stream? options]}]
+  [{:keys [messages model tools tool-choice stream? options schema]}]
   (cond-> {:model model
            :messages messages
            :stream (boolean stream?)}
@@ -63,6 +63,12 @@
 
     tool-choice
     (assoc :tool_choice tool-choice)
+
+    schema
+    (assoc :response_format
+           {:type "json_schema"
+            :json_schema {:name "response"
+                          :schema schema}})
 
     (contains? options :temperature)
     (assoc :temperature (Float/parseFloat (str (:temperature options))))

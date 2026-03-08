@@ -1,6 +1,7 @@
 (ns llm.cli
   "CLI wiring for the llm command."
   (:require [cli-matic.core :as cli]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [jsonista.core :as json]
             [llm.model-catalog :as model-catalog]
@@ -16,6 +17,9 @@
 
 (def pretty-json-object-mapper
   (json/object-mapper {:pretty true}))
+
+(def schema-json-object-mapper
+  (json/object-mapper {:decode-key-fn keyword}))
 
 (def prompt-shorthand-exclusions
   #{"prompt" "models" "-?" "--help"})
@@ -62,9 +66,73 @@
             (map (fn [[k v]] [(keyword k) v]))
             pairs))))
 
+(def schema-type-map
+  {"str" "string"
+   "string" "string"
+   "int" "integer"
+   "integer" "integer"
+   "float" "number"
+   "number" "number"
+   "bool" "boolean"
+   "boolean" "boolean"})
+
+(defn- parse-schema-field
+  [field-spec]
+  (let [trimmed (str/trim field-spec)
+        [_ raw-name raw-type raw-description]
+        (re-matches #"^([A-Za-z0-9_-]+)(?:\s+([A-Za-z0-9_-]+))?(?:\s*:\s*(.*))?$"
+                    trimmed)
+        name (some-> raw-name str/trim)
+        type (or (some-> raw-type str/lower-case schema-type-map)
+                 "string")
+        description (some-> raw-description str/trim not-empty)]
+    (when (seq name)
+      [name (cond-> {:type type}
+              description
+              (assoc :description description))])))
+
+(defn concise-schema?
+  "Return true when the schema value looks like concise schema DSL."
+  [schema-value]
+  (and (seq schema-value)
+       (let [trimmed (str/trim schema-value)]
+         (and (not (str/starts-with? trimmed "{"))
+              (not (str/starts-with? trimmed "["))))))
+
+(defn concise-schema->json-schema
+  "Convert concise schema DSL to a JSON-schema-compatible map."
+  [schema-value]
+  (let [fields (->> (str/split schema-value #",|\n")
+                    (map parse-schema-field)
+                    (remove nil?)
+                    vec)]
+    {:type "object"
+     :properties (into {} fields)
+     :required (mapv first fields)}))
+
+(defn wrap-multi-schema
+  "Wrap an item schema in the object-with-items array shape used by schema-multi."
+  [schema]
+  {:type "object"
+   :properties {:items {:type "array"
+                        :items schema}}
+   :required ["items"]})
+
+(defn parse-schema
+  "Parse a schema from concise DSL, inline JSON, or a JSON file path."
+  [schema-value]
+  (when (seq schema-value)
+    (let [trimmed (str/trim schema-value)
+          schema-source (if (.exists (io/file trimmed))
+                          (slurp trimmed)
+                          trimmed)]
+      (if (concise-schema? schema-source)
+        (concise-schema->json-schema schema-source)
+        (json/read-value schema-source schema-json-object-mapper)))))
+
 (defn ->completion-request
   "Convert CLI options into a normalized completion request record."
-  [{:keys [model system stream raw prompt option stdin tool tool-max-rounds]}]
+  [{:keys [model system stream raw prompt option stdin tool tool-max-rounds schema schema-multi]}]
   (types/map->CompletionRequest
    {:prompt (resolve-prompt {:prompt prompt
                              :stdin stdin})
@@ -74,7 +142,11 @@
     :raw? raw
     :options (option-pairs->map option)
     :tools tool
-    :max-tool-rounds tool-max-rounds}))
+    :max-tool-rounds tool-max-rounds
+    :schema (cond
+              (seq schema-multi) (-> schema-multi parse-schema wrap-multi-schema)
+              (seq schema) (parse-schema schema)
+              :else nil)}))
 
 (defn resolve-cli-model
   "Resolve the effective model id from an exact id, alias, or query terms."
@@ -128,6 +200,27 @@
       (println (:response result)))
     0))
 
+(defn run-schema-prompt-command
+  "Execute a prompt request with schema-constrained output."
+  [{:keys [json host] :as opts}]
+  (let [resolved-model (resolve-cli-model opts)
+        descriptor (some #(when (= resolved-model (:id %)) %)
+                         (model-catalog/list-models {:base-url host}))
+        _ (when-not (model-catalog/model-supports-feature? descriptor :schemas)
+            (throw (ex-info "Model does not support schemas"
+                            {:model resolved-model
+                             :features (:features descriptor)})))
+        provider (openai-chat/make-provider {:base-url host
+                                             :model resolved-model})
+        request (->completion-request (assoc opts
+                                             :stdin (read-stdin)
+                                             :model resolved-model))
+        result (protocols/complete provider request)]
+    (if json
+      (println (json/write-value-as-string result pretty-json-object-mapper))
+      (println (:response result)))
+    0))
+
 (defn run-prompt-command
   "Execute the prompt command."
   [opts]
@@ -135,8 +228,14 @@
     (when-not (:prompt request)
       (throw (ex-info "Missing prompt"
                       {:opts opts})))
-    (if (seq (:tools request))
+    (cond
+      (seq (:tools request))
       (run-tool-prompt-command opts)
+
+      (:schema request)
+      (run-schema-prompt-command opts)
+
+      :else
       (run-plain-prompt-command opts))))
 
 (defn run-models-command
@@ -206,6 +305,12 @@
     :as "Maximum number of tool execution rounds"
     :type :int
     :default 8}
+   {:option "schema"
+    :as "Inline JSON schema, concise schema DSL, or path to a JSON schema file"
+    :type :string}
+   {:option "schema-multi"
+    :as "Concise schema DSL or JSON schema for multiple items"
+    :type :string}
    {:option "prompt"
     :as "Prompt text"
     :short 0

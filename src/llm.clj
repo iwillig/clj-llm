@@ -80,7 +80,7 @@
                                 model-or-opts))))
 
 (defn- request-from-prompt
-  [prompt {:keys [system stream raw options tools tool-choice max-tool-rounds messages]}]
+  [prompt {:keys [system stream raw options tools tool-choice max-tool-rounds messages schema]}]
   (types/map->CompletionRequest
    {:prompt prompt
     :system system
@@ -90,7 +90,8 @@
     :tools tools
     :tool-choice tool-choice
     :max-tool-rounds max-tool-rounds
-    :messages messages}))
+    :messages messages
+    :schema schema}))
 
 (defn- completion-provider
   [model-config]
@@ -121,10 +122,17 @@
    (let [resolved-model (model model-config)
          request (assoc (request-from-prompt prompt-text opts)
                         :model (:model resolved-model))]
-     (if (seq (:tools request))
+     (cond
+       (seq (:tools request))
        (tool-loop/run-tool-loop (chat-provider resolved-model)
                                 request
                                 (:tools request))
+
+       (:schema request)
+       (protocols/complete (chat-provider resolved-model)
+                           request)
+
+       :else
        (protocols/complete (completion-provider resolved-model)
                            request)))))
 

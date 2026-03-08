@@ -1,11 +1,14 @@
 (ns llm.openai-compat-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
             [jsonista.core :as json]
             [llm.cli :as cli]
             [llm.config :as config]
             [llm.model-catalog :as model-catalog]
             [llm.openai-compat :as openai-compat]
-            [llm.protocols :as protocols]))
+            [llm.protocols :as protocols]
+            [mockfn.macros :refer [verifying]]
+            [mockfn.matchers :refer [exactly]]))
 
 (defrecord StubTransport [response stream-events requests])
 
@@ -68,7 +71,8 @@
           :messages nil
           :tools nil
           :tool-choice nil
-          :max-tool-rounds nil}
+          :max-tool-rounds nil
+          :schema nil}
          (into {}
                (cli/->completion-request
                 {:stdin "stdin text"
@@ -80,6 +84,46 @@
                  :option ["temperature" "0.2"]}))))
   (is (= llm.types.CompletionRequest
          (class (cli/->completion-request {:prompt "hello"})))))
+
+(deftest parse-schema-test
+  (is (= {:type "object"
+          :properties {:name {:type "string"}}
+          :required ["name"]}
+         (cli/parse-schema
+          "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}")))
+  (is (= {:type "object"
+          :properties {"name" {:type "string"}
+                       "age" {:type "integer"}
+                       "one_sentence_bio" {:type "string"}}
+          :required ["name" "age" "one_sentence_bio"]}
+         (cli/parse-schema "name, age int, one_sentence_bio")))
+  (is (= {:type "object"
+          :properties {"name" {:type "string"
+                                 :description "the person's name"}
+                       "organization" {:type "string"
+                                        :description "who they represent"}}
+          :required ["name" "organization"]}
+         (cli/parse-schema "name: the person's name\norganization: who they represent")))
+  (spit ".tmp-schema.json"
+        "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}")
+  (try
+    (is (= {:type "object"
+            :properties {:name {:type "string"}}
+            :required ["name"]}
+           (cli/parse-schema ".tmp-schema.json")))
+    (finally
+      (io/delete-file ".tmp-schema.json" true))))
+
+(deftest wrap-multi-schema-test
+  (is (= {:type "object"
+          :properties {:items {:type "array"
+                               :items {:type "object"
+                                       :properties {"name" {:type "string"}}
+                                       :required ["name"]}}}
+          :required ["items"]}
+         (-> "name"
+             cli/parse-schema
+             cli/wrap-multi-schema))))
 
 (deftest coerce-options-test
   (let [options (openai-compat/coerce-options {:temperature "0.2"
@@ -156,15 +200,19 @@
         provider (openai-compat/make-provider
                   {:transport (->StubTransport nil nil requests)})]
     (with-redefs [cli/stdin-available? (constantly false)
-                  openai-compat/make-provider (fn [_] provider)
                   model-catalog/resolve-model (fn [_] config/default-model)]
       (is (= "Stub response\n"
              (with-out-str
-               (cli/run-prompt-command {:prompt "Say hi briefly."
-                                        :stream false
-                                        :host config/default-base-url
-                                        :model config/default-model
-                                        :json false}))))
+               (verifying [(openai-compat/make-provider
+                            {:base-url config/default-base-url
+                             :model config/default-model})
+                           provider
+                           (exactly 1)]
+                 (cli/run-prompt-command {:prompt "Say hi briefly."
+                                          :stream false
+                                          :host config/default-base-url
+                                          :model config/default-model
+                                          :json false})))))
       (is (= [[:post {:url (str config/default-base-url "/completions")
                       :headers {"authorization"
                                 (str "Bearer " config/default-api-key)}
@@ -184,6 +232,30 @@
                             {:prompt "what time is it?"
                              :tool ["llm_time"]
                              :tool-max-rounds 4})))))
+
+(deftest completion-request-with-schema-test
+  (is (= {:type "object"
+          :properties {:name {:type "string"}}
+          :required ["name"]}
+         (:schema (cli/->completion-request
+                   {:prompt "invent a dog"
+                    :schema "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}"})))))
+  (is (= {:type "object"
+          :properties {"name" {:type "string"}
+                       "age" {:type "integer"}}
+          :required ["name" "age"]}
+         (:schema (cli/->completion-request
+                   {:prompt "invent a dog"
+                    :schema "name, age int"}))))
+  (is (= {:type "object"
+          :properties {:items {:type "array"
+                               :items {:type "object"
+                                       :properties {"name" {:type "string"}}
+                                       :required ["name"]}}}
+          :required ["items"]}
+         (:schema (cli/->completion-request
+                   {:prompt "invent dogs"
+                    :schema-multi "name"}))))
 
 (deftest provider-streams-through-transport-test
   (let [events (atom [])]

@@ -88,6 +88,12 @@
     (is (some #{"tools"} (:features descriptor-map)))
     (is (map? (:raw descriptor-map)))))
 
+(deftest model-supports-feature-test
+  (let [schema-model (model-catalog/raw-model->descriptor {:id "gpt-4o-mini"})
+        plain-model (model-catalog/raw-model->descriptor {:id "gpt-3.5-turbo"})]
+    (is (true? (model-catalog/model-supports-feature? schema-model :schemas)))
+    (is (false? (model-catalog/model-supports-feature? plain-model :schemas)))))
+
 (deftest formatters-test
   (let [descriptor (model-catalog/raw-model->descriptor {:id "gpt-4o-mini"})]
     (is (= "OpenAI Chat: gpt-4o-mini (aliases: 4o-mini)"
