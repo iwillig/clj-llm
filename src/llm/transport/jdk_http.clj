@@ -5,8 +5,7 @@
             [llm.protocols :as protocols])
   (:import (java.net URI)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers
-                          HttpRequest$Builder HttpResponse
-                          HttpResponse$BodyHandlers)
+                          HttpRequest$Builder HttpResponse$BodyHandlers)
            (java.io InputStream)))
 
 (set! *warn-on-reflection* true)

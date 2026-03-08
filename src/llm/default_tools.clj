@@ -1,7 +1,7 @@
 (ns llm.default-tools
   "Built-in tool implementations."
   (:require [llm.tools :as tools])
-  (:import (java.time Instant ZonedDateTime ZoneOffset)
+  (:import (java.time Instant ZonedDateTime)
            (java.time.format DateTimeFormatter)))
 
 (def ^:private version "0.1.0")

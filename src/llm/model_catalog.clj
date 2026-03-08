@@ -265,12 +265,12 @@
 
 (defn search-models
   "Search normalized model descriptors by query terms."
-  [{:keys [query-terms] :as opts}]
+  [opts]
   (search-model-descriptors (catalog opts) opts))
 
 (defn resolve-model
   "Resolve a concrete model id from an exact id, alias, or query terms."
-  [{:keys [model query-terms] :as opts}]
+  [opts]
   (resolve-model-id (catalog opts) opts))
 
 (defn descriptor->map

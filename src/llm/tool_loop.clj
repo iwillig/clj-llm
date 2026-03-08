@@ -1,6 +1,7 @@
 (ns llm.tool-loop
   "Tool execution loop for chat-based providers."
-  (:require [jsonista.core :as json]
+  (:require [clojure.string :as str]
+            [jsonista.core :as json]
             [llm.protocols :as protocols]
             [llm.tools :as tools]
             [llm.types :as types]))
@@ -26,7 +27,7 @@
   (cond
     (map? arguments) arguments
     (string? arguments)
-    (if (clojure.string/blank? arguments)
+    (if (str/blank? arguments)
       {}
       (json/read-value arguments json-object-mapper))
     (nil? arguments) {}

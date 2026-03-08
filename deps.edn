@@ -4,6 +4,7 @@
  :paths ["src" "test" "dev"]
  :aliases {:dev {:extra-deps
                  {io.github.tonsky/clj-reload {:mvn/version "0.1.0"}
+                  clj-kondo/clj-kondo {:mvn/version "2022.09.08"}
                   nubank/mockfn {:mvn/version "0.7.0"}}}
 
            :jvm-base

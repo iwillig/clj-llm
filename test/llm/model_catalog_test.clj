@@ -1,6 +1,7 @@
 (ns llm.model-catalog-test
   (:require [clojure.test :refer [deftest is testing]]
-            [llm.model-catalog :as model-catalog]))
+            [llm.model-catalog :as model-catalog]
+            [llm.openai-compat]))
 
 (def raw-models
   [{:id "gpt-4o-mini"}

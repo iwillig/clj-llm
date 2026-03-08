@@ -3,7 +3,10 @@
             [clojure.test :refer [deftest is testing]]
             [llm :as llm]
             [llm.model-catalog :as model-catalog]
+            [llm.openai-chat]
+            [llm.openai-compat]
             [llm.protocols :as protocols]
+            [llm.tool-loop]
             [llm.tools :as tools]
             [llm.types :as types]))
 
@@ -97,8 +100,8 @@
 (deftest prompt-text-test
   (with-redefs [llm/prompt (fn
                              ([prompt] (types/map->CompletionResponse {:response (str prompt)}))
-                             ([model-or-prompt prompt] (types/map->CompletionResponse {:response prompt}))
-                             ([model-config prompt opts] (types/map->CompletionResponse {:response (:system opts)})))]
+                             ([_ prompt] (types/map->CompletionResponse {:response prompt}))
+                             ([_ _ opts] (types/map->CompletionResponse {:response (:system opts)})))]
     (is (= "hi" (llm/prompt-text "hi")))
     (is (= "hello" (llm/prompt-text {:model "gpt-test"} "hello")))
     (is (= "brief" (llm/prompt-text {:model "gpt-test"} "hello" {:system "brief"})))))

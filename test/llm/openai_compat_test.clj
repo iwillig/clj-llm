@@ -5,8 +5,7 @@
             [llm.config :as config]
             [llm.model-catalog :as model-catalog]
             [llm.openai-compat :as openai-compat]
-            [llm.protocols :as protocols]
-            [llm.types :as types]))
+            [llm.protocols :as protocols]))
 
 (defrecord StubTransport [response stream-events requests])
 
