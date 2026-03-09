@@ -9,9 +9,7 @@
             [llm.protocols :as protocols]
             [llm.tool-loop]
             [llm.tools :as tools]
-            [llm.types :as types]
-            [mockfn.macros :refer [verifying]]
-            [mockfn.matchers :refer [exactly]]))
+            [llm.types :as types]))
 
 (deftest model-test
   (testing "builds default model config"
@@ -67,20 +65,14 @@
                        :response "plain response"}))
                    (complete-text [_ _] nil)
                    (complete-stream [_ _ _] nil))]
-    (is (= "plain response"
-           (:response
-            (verifying [(llm.openai-compat/make-provider
-                         {:model "gpt-test"
-                          :base-url llm.config/default-base-url
-                          :api-key llm.config/default-api-key})
-                        provider
-                        (exactly 1)]
-                       (llm/prompt {:model "gpt-test"}
-                                   "Say hi"
-                                   {:system "Be concise"
-                                    :stream false})))))
-    (is (= "Say hi" (:prompt (first @requests))))
-    (is (= "Be concise" (:system (first @requests))))))
+    (with-redefs [llm.openai-compat/make-provider (fn [_] provider)]
+      (let [response (llm/prompt {:model "gpt-test"}
+                                 "Say hi"
+                                 {:system "Be concise"
+                                  :stream false})]
+        (is (= "plain response" (:response response)))
+        (is (= "Say hi" (:prompt (first @requests))))
+        (is (= "Be concise" (:system (first @requests))))))))
 
 (deftest prompt-with-tools-test
   (let [calls (atom [])
@@ -94,24 +86,17 @@
                                            :required ["text"]}
                               :invoke (fn [{:keys [text]}]
                                         (str/upper-case text))})]
-    (is (= "tool response"
-           (:response
-            (verifying [(llm.openai-chat/make-provider
-                         {:model "gpt-test"
-                          :base-url llm.config/default-base-url
-                          :api-key llm.config/default-api-key})
-                        :chat-provider
-                        (exactly 1)]
-                       (with-redefs [llm.tool-loop/run-tool-loop
-                                     (fn [provider request available-tools]
-                                       (swap! calls conj [provider request available-tools])
-                                       response)]
-                         (llm/prompt {:model "gpt-test"}
-                                     "Convert panda"
-                                     {:tools [upper-tool]}))))))
-    (is (= :chat-provider (ffirst @calls)))
-    (is (= "Convert panda" (get-in (first @calls) [1 :prompt])))
-    (is (= [upper-tool] (get-in (first @calls) [2])))))
+    (with-redefs [llm.openai-chat/make-provider (fn [_] :chat-provider)
+                  llm.tool-loop/run-tool-loop (fn [provider request available-tools]
+                                                (swap! calls conj [provider request available-tools])
+                                                response)]
+      (is (= "tool response"
+             (:response (llm/prompt {:model "gpt-test"}
+                                    "Convert panda"
+                                    {:tools [upper-tool]}))))
+      (is (= :chat-provider (ffirst @calls)))
+      (is (= "Convert panda" (get-in (first @calls) [1 :prompt])))
+      (is (= [upper-tool] (get-in (first @calls) [2]))))))
 
 (deftest prompt-text-test
   (with-redefs [llm/prompt (fn
@@ -149,40 +134,32 @@
                       {:provider :stub
                        :response "Hello back"}))
                    (complete-text [_ _] nil)
-                   (complete-stream [_ _ _] nil))
-        {:keys [conversation response]}
-        (verifying [(llm.openai-chat/make-provider
-                     {:model "gpt-test"
-                      :base-url llm.config/default-base-url
-                      :api-key llm.config/default-api-key})
-                    provider
-                    (exactly 1)]
-          (llm/converse (llm/conversation {:model "gpt-test"}
-                                          {:system "Be concise"})
-                        "Hello"))]
-    (is (= "Hello back" (:response response)))
-    (is (= 3 (count (:messages conversation))))
-    (is (= "user" (get-in @calls [0 :messages 1 :role])))
-    (is (= "Hello" (get-in @calls [0 :messages 1 :content])))))
+                   (complete-stream [_ _ _] nil))]
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-test")
+                  llm.openai-chat/make-provider (fn [_] provider)]
+      (let [conversation (llm/conversation {:model "gpt-test"}
+                                           {:system "Be concise"})
+            {:keys [conversation response]}
+            (llm/converse conversation "Hello")]
+        (is (= "Hello back" (:response response)))
+        (is (= 3 (count (:messages conversation))))
+        (is (= "user" (get-in @calls [0 :messages 1 :role])))
+        (is (= "Hello" (get-in @calls [0 :messages 1 :content])))))))
 
 (deftest converse-with-tools-test
   (let [calls (atom [])
-        conversation (llm/conversation {:model "gpt-test"}
-                                       {:tools [:tool-a]})
         response (types/map->CompletionResponse
                   {:provider :stub
                    :response "Used tool"})]
-    (with-redefs [llm.tool-loop/run-tool-loop (fn [provider request available-tools]
+    (with-redefs [model-catalog/resolve-model (fn [_] "gpt-test")
+                  llm.openai-chat/make-provider (fn [_] :chat-provider)
+                  llm.tool-loop/run-tool-loop (fn [provider request available-tools]
                                                 (swap! calls conj [provider request available-tools])
                                                 response)]
-      (let [{:keys [conversation response]}
-            (verifying [(llm.openai-chat/make-provider
-                         {:model "gpt-test"
-                          :base-url llm.config/default-base-url
-                          :api-key llm.config/default-api-key})
-                        :chat-provider
-                        (exactly 1)]
-              (llm/converse conversation "Use the tool"))]
+      (let [conversation (llm/conversation {:model "gpt-test"}
+                                           {:tools [:tool-a]})
+            {:keys [conversation response]}
+            (llm/converse conversation "Use the tool")]
         (is (= "Used tool" (:response response)))
         (is (= 2 (count (:messages conversation))))
         (is (= :chat-provider (ffirst @calls)))
